@@ -1,18 +1,198 @@
 Description: CD12352 - Infrastructure as Code Project - Udagram
 
 Parameters:
-  # Add your parameters here
+  AppName:
+    Description: The name of the application
+    Type: String
+    Default: udagram
+  EnvironmentName:
+    Description: The environment name
+    Type: String
+    Default: dev
+  S3StaticName:
+    Description: The S3 bucket for storing static content
+    Type: String
+    Default: udagram-static-bucket
+  InstanceType:
+    Description: The EC2 instance type
+    Type: String
+    Default: t2.micro
+  InstanceAmiId:
+    Description: The AMI ID for the EC2 instance
+    Type: AWS::EC2::Image::Id
+    Default: ami-0cf1810907a781f00
 
 Resources:
-  # Add your resources here
+  # S3 Bucket for website content
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3StaticName
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      Tags: 
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-s3-bucket
+    DeletionPolicy: Delete
+
+  S3WebAppPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: s3:*
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket', '/*']]
+            Principal:
+              AWS: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-s3-bucket-policy
+  # Role
+  WebIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'ec2.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-webapp-role
+  WebInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - 
+          Ref: WebIAMRole
+  # EC2
+  WebInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref WebIAMRole
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ELB Security Group
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${AppName}-${EnvironmentName}-VPCID'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-elb-security-group
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC2 Security Group
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${AppName}-${EnvironmentName}-VPCID'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref ELBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ec2-security-group
+  EC2TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 15
+      HealthyThresholdCount: 5
+      Matcher:
+        HttpCode: '200'
+      Name: EC2TargetGroup
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: '20'
+      UnhealthyThresholdCount: 3
+      VpcId:
+        Fn::ImportValue:
+          !Sub '${AppName}-${EnvironmentName}-VPCID'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ec2-target-group
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref EC2TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb-listener
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+      - Fn::ImportValue: !Sub '${AppName}-${EnvironmentName}-PrivateSubnet1'
+      - Fn::ImportValue: !Sub '${AppName}-${EnvironmentName}-PrivateSubnet2'
+      SecurityGroups: !Ref ELBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb
   # We include a portion of the LaunchTemplate resource so you can use the UserData.
   WebAppLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties: 
+      ImageId: !Ref InstanceAmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref WebInstanceProfile
+      SecurityGroupIds: 
+        - !Ref EC2SecurityGroup
       LaunchTemplateData:
         UserData:
           Fn::Base64: |
             #!/bin/bash
             apt-get update -y
             sudo apt-get install nginx -y
+            cd /var/www/html
+            echo "Welcome to Udagram!" > index.html
             service nginx start
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-webapp-launch-template
+  WebServerGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebAppLaunchTemplate
+        Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
+      MaxSize: '3'
+      MinSize: '1'
+      TargetGroupARNs:
+        - !Ref EC2TargetGroup
+      VPCZoneIdentifier:
+      - Fn::ImportValue: !Sub '${AppName}-${EnvironmentName}-PrivateSubnet1'
+      - Fn::ImportValue: !Sub '${AppName}-${EnvironmentName}-PrivateSubnet2'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-webapp

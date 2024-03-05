@@ -1,6 +1,18 @@
 [
 	{
-		"ParameterKey": "Add you parameters here",
-		"ParameterValue": "Add you parameters here"
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "dev"
+    },
+	{
+		"ParameterKey": "S3StaticName",
+		"ParameterValue": "udagram-static-bucket"
+	},
+	{
+		"ParameterKey": "InstanceType",
+		"ParameterValue": "t2.micro"
+	},
+	{
+		"ParameterKey": "InstanceAmiId",
+		"ParameterValue": "ami-0cf1810907a781f00"
 	}
 ]

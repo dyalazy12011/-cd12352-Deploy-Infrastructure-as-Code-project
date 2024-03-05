@@ -1,11 +1,14 @@
 # CD12352 - Infrastructure as Code Project Solution
-# [YOUR NAME HERE]
+# [Dai Bui]
 
 ## Spin up instructions
-TODO
+Switch to folder `starter`. Open Git Bash terminal.
+Run `sh ./scripts/create_stack.sh udagram-network-dev network.yml network-parameters.json`
+Run `sh ./scripts/create_stack.sh udagram-app-dev udagram.yml udagram-parameters.json`
 
 ## Tear down instructions
-TODO
+Switch to folder `starter`. Open Git Bash terminal.
+Run `sh ./scripts/delete_stack.sh udagram-app-dev`
+Run `sh ./scripts/delete_stack.sh udagram-network-dev`
 
 ## Other considerations
-TODO (optional)
