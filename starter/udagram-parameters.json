@@ -3,6 +3,10 @@
         "ParameterKey": "EnvironmentName",
         "ParameterValue": "dev"
     },
+    {
+        "ParameterKey": "AppName",
+        "ParameterValue": "udagram"
+    },
 	{
 		"ParameterKey": "S3StaticName",
 		"ParameterValue": "udagram-static-bucket"

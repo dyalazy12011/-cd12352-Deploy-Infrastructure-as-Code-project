@@ -12,3 +12,5 @@ Run `sh ./scripts/delete_stack.sh udagram-app-dev`
 Run `sh ./scripts/delete_stack.sh udagram-network-dev`
 
 ## Other considerations
+Output of udagram.yml is Application Load Balancer DNS Domain.
+Open the DNS Domain on browser to see the web application
