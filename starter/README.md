@@ -14,3 +14,4 @@ Run `sh ./scripts/delete_stack.sh udagram-network-dev`
 ## Other considerations
 Output of udagram.yml is Application Load Balancer DNS Domain.
 Open the DNS Domain on browser to see the web application
+http://udagra-appli-gsivg99mg4dz-1558411198.us-east-1.elb.amazonaws.com
